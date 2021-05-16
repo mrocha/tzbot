@@ -1,9 +1,10 @@
+import asyncio
 import json
 import requests
-import time
 import utils
 import settings
 
+from aiohttp import ClientSession
 from datetime import datetime
 from typing import Any, Callable, Dict, List
 from urllib.parse import urljoin
@@ -20,7 +21,7 @@ class RetriableError(RuntimeError):
 def backoff(func: Callable[..., Any]) -> Callable[..., Any]:
     """Decorator for exponential backoff retries."""
 
-    def wrapper(*args, **kwargs) -> Any:
+    async def wrapper(*args, **kwargs) -> Any:
         retries = settings.BACKOFF_MAX_RETRIES
         delay = settings.BACKOFF_INITIAL_WAIT
         step = 2
@@ -28,10 +29,10 @@ def backoff(func: Callable[..., Any]) -> Callable[..., Any]:
 
         while retries > 0:
             try:
-                return func(*args, **kwargs)
+                return await func(*args, **kwargs)
             except RetriableError as e:
                 last_error = e
-                time.sleep(delay)
+                await asyncio.sleep(delay)
                 delay *= step
                 retries -= 1
 
@@ -41,12 +42,12 @@ def backoff(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 @backoff
-def get_time_at(timezone: str) -> datetime:
+async def get_time_at(timezone: str, session: ClientSession) -> datetime:
     """Makes a request to get the time at the given timezone."""
     if not utils.is_valid_timezone(timezone):
         return None
 
-    response = _make_call(f"/api/timezone/{timezone}")
+    response = await _make_call(f"/api/timezone/{timezone}", session)
 
     try:
         return datetime.fromisoformat(response.get("datetime", ""))
@@ -55,21 +56,21 @@ def get_time_at(timezone: str) -> datetime:
 
 
 @backoff
-def get_timezones() -> List[str]:
+async def get_timezones(session: ClientSession) -> List[str]:
     """Makes a request to retrieve all available timezones."""
-    return _make_call(f"/api/timezone")
+    return await _make_call(f"/api/timezone", session)
 
 
-def _make_call(path: str) -> Dict[str, Any]:
+async def _make_call(path: str, session: ClientSession) -> Dict[str, Any]:
     """Makes a REST GET request to the `TIME_API` service."""
     url = urljoin(settings.TIME_API, path)
 
     try:
-        response = requests.get(url)
-        response.raise_for_status()
-        return response.json()
-    except requests.HTTPError:
-        if response.status_code == 404:
+        async with session.get(url) as response:
+            response.raise_for_status()
+            return await response.json()
+    except requests.HTTPError as e:
+        if e.response.status_code == 404:
             raise APIError("unknown timezone")
         else:
             raise RetriableError(

@@ -21,7 +21,6 @@ run: venv aliases.json
 clean:
 	rm -rf venv
 	rm -rf *.db
-	rm -rf aliases.json
 	find . -type f -name '*.pyc' -delete 
 	find . -type d -name __pycache__ -delete
 	rm -rf .pytest_cache

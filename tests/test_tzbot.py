@@ -2,6 +2,7 @@ import api_client as api
 import pytest
 import settings
 
+from aiohttp import ClientSession
 from io import StringIO
 from pathlib import Path
 from stream import StdioStream

@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
+import asyncio
 import api_client as api
 import json
 
-# Retrieve all available timezones
-try:
-    timezones = api.get_timezones()
-except api.APIError:
-    timezones = []
+from aiohttp import ClientSession
 
-# Map each suffix with its timezone
-aliases = {tz.split("/")[-1]: tz for tz in timezones}
 
-# Validate each suffix is unique
-assert len(aliases) == len(timezones)
+async def main():
+    # Retrieve all available timezones
+    async with ClientSession() as session:
+        try:
+            timezones = await api.get_timezones(session)
+        except api.APIError:
+            timezones = []
 
-# Dump the aliases into a JSON file
-with open("aliases.json", "w") as f:
-    f.write(json.dumps(aliases, indent=2))
+    # Map each suffix with its timezone
+    aliases = {tz.split("/")[-1]: tz for tz in timezones}
+
+    # Validate each suffix is unique
+    assert len(aliases) == len(timezones)
+
+    # Dump the aliases into a JSON file
+    with open("aliases.json", "w") as f:
+        f.write(json.dumps(aliases, indent=2))
+
+asyncio.run(main())

@@ -1,3 +1,4 @@
+import asyncio
 import re
 import sys
 
@@ -6,40 +7,44 @@ from typing import List, Optional, Tuple
 
 
 class ChatStream(ABC):
-    @property
     @abstractmethod
-    def reader(self):
-        """Stream from where messages are received."""
-
-    @property
-    @abstractmethod
-    def writer(self):
-        """Stream where messages are sent."""
+    async def read_command(self) -> Tuple[str, str, List[str]]:
+        """Retrieves the next command from the stream"""
 
     @abstractmethod
-    def is_command(self, line: str) -> bool:
-        """Validates a given string is a valid bot command."""
-
-    @abstractmethod
-    def parse_command(self, line: str) -> Tuple[str, str, List[str]]:
-        """Extracts nickname, command and arguments from a string."""
+    async def send_message(self, msg: str) -> None:
+        """Sends message to the stream"""
 
 
 class StdioStream(ChatStream):
-    @property
-    def reader(self):
-        return sys.stdin
+    async def read_command(self) -> Tuple[str, str, List[str]]:
+        line = await self._readline()
 
-    @property
-    def writer(self):
-        return sys.stdout
+        while line and not self._is_command(line):
+            line = await self._readline()
 
-    def is_command(self, line: str) -> bool:
+        if not line:
+            raise EOFError()
+
+        return self._parse_command(line)
+
+    async def send_message(self, msg: str) -> None:
+        await self._write(f"{msg}\n")
+
+    async def _readline(self) -> None:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, sys.stdin.readline)
+
+    async def _write(self, msg: str) -> None:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, sys.stdout.write, msg)
+
+    def _is_command(self, line: str) -> bool:
         cmd_regex = r"[a-zA-Z]\w{0,31}: \s*(!timeat|!timepopularity) .+"
         return re.fullmatch(cmd_regex, line.strip()) is not None
 
-    def parse_command(self, line: str) -> Tuple[str, str, List[str]]:
-        if not self.is_command(line):
+    def _parse_command(self, line: str) -> Tuple[str, str, List[str]]:
+        if not self._is_command(line):
             raise ValueError("invalid command message")
 
         nick, msg = line.split(": ", 1)

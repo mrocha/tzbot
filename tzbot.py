@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 import api_client as api
+import asyncio
 import json
 import settings
 import shelve
-import signal
 import sys
 import utils
 
+from aiohttp import ClientSession
 from datetime import datetime
 from io import TextIOBase
+from pathlib import Path
+from signal import SIGINT, SIGTERM
 from stream import ChatStream, StdioStream
 from typing import Dict, List, Optional, Tuple
 
@@ -36,61 +39,47 @@ class TZBot:
         self.eof = False
         self.aliases = self._load_aliases()
 
-    def run(self) -> None:
+    async def run(self) -> None:
         """Process every message in stream until EOF."""
-        while not self.eof:
-            self.process_msg()
+        async with ClientSession() as session:
+            self.session = session
+            while not self.eof:
+                try:
+                    nick, cmd, args = await self.stream.read_command()
+                except EOFError:
+                    self.eof = True
+                    await asyncio.sleep(30)
+                else:
+                    asyncio.create_task(self._process_cmd(nick, cmd, args))
 
-    def process_msg(self) -> None:
-        """Processes the next message in the input stream."""
-        try:
-            nick, cmd, args = self._receive_cmd()
-        except EOFError:
-            self.eof = True
-        else:
-            if result := self._process_cmd(nick, cmd, args):
-                self._send_msg(result)
-
-    def _receive_cmd(self) -> Tuple[str, str, List[str]]:
-        """Reads and validate a message from the input stream.
-
-        When the streams reaches to EOF, it raises an EOFError.
-        """
-        line = self.stream.reader.readline()
-
-        while line and not self.stream.is_command(line):
-            line = self.stream.reader.readline()
-
-        if not line:
-            raise EOFError()
-
-        return self.stream.parse_command(line)
-
-    def _send_msg(self, result: str) -> None:
+    async def _send_msg(self, result: str) -> None:
         """Writes a message to the output stream."""
-        self.stream.writer.write(f"{result}\n")
+        await self.stream.writer.write(f"{result}\n")
 
-    def _process_cmd(self, nick: str, cmd: str, args: List[str]) -> Optional[str]:
+    async def _process_cmd(self, nick: str, cmd: str, args: List[str]) -> Optional[str]:
         """Fulfills a command if it's present in the message.
 
         It returns the response message for the requested command.
         It returns `None` when there is no message to be sent.
         """
+        message = None
+
         if cmd == "!timeat" and len(args) == 1:
-            return self._timeat_cmd(args[0])
+            message = await self._timeat_cmd(args[0])
         elif cmd == "!timepopularity" and len(args) == 1:
-            return self._timepopularity_cmd(args[0])
+            message = self._timepopularity_cmd(args[0])
 
-        return None
+        if message:
+            await self.stream.send_message(message)
 
-    def _timeat_cmd(self, tz: str) -> str:
+    async def _timeat_cmd(self, tz: str) -> str:
         """Implements the `!timeat <tzinfo>` command."""
         # If timezone is an alias, use the full timezone name
         if tz in self.aliases:
             tz = self.aliases[tz]
 
         try:
-            tztime = api.get_time_at(tz)
+            tztime = await api.get_time_at(tz, self.session)
         except api.APIError as e:
             # Answer with error message
             return str(e)
@@ -120,16 +109,25 @@ class TZBot:
 
     def _load_aliases(self) -> Dict[str, str]:
         """Loads the aliases map from the pre-generated JSON file."""
+        if not Path("aliases.json").exists():
+            return {}
         with open("aliases.json") as f:
             return json.load(f)
 
 
-if __name__ == "__main__":
+async def main():
+    loop = asyncio.get_running_loop()
+    task = asyncio.current_task()
 
-    def signal_handler(signal, frame):
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, signal_handler)
+    for signal in [SIGINT, SIGTERM]:
+        loop.add_signal_handler(signal, task.cancel)
 
     bot = TZBot(StdioStream())
-    bot.run()
+    await bot.run()
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except asyncio.CancelledError:
+        pass

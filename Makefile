@@ -12,7 +12,7 @@ venv: requirements.txt
 		pip install -r requirements.txt; \
 	)
 
-run: venv aliases.json
+run: venv
 	@( \
 		. venv/bin/activate; \
 		python3 tzbot.py; \

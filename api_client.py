@@ -1,6 +1,6 @@
+import aiohttp
 import asyncio
 import json
-import requests
 import utils
 import settings
 
@@ -69,16 +69,16 @@ async def _make_call(path: str, session: ClientSession) -> Dict[str, Any]:
         async with session.get(url) as response:
             response.raise_for_status()
             return await response.json()
-    except requests.HTTPError as e:
-        if e.response.status_code == 404:
+    except (aiohttp.ContentTypeError, json.decoder.JSONDecodeError):
+        raise RetriableError("malformed response error")
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
             raise APIError("unknown timezone")
         else:
             raise RetriableError(
-                f"unable to retrieve time (http code: {response.status_code})"
+                f"unable to retrieve time (http code: {e.status})"
             )
-    except (requests.ConnectionError, requests.Timeout):
+    except aiohttp.ClientConnectionError:
         raise RetriableError("connection error")
-    except json.decoder.JSONDecodeError:
-        raise RetriableError("malformed response error")
     except Exception:
         raise RetriableError("unknown error")

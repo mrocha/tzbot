@@ -43,14 +43,19 @@ class TZBot:
         """Process every message in stream until EOF."""
         async with ClientSession() as session:
             self.session = session
+            tasks = []
+
             while not self.eof:
                 try:
                     nick, cmd, args = await self.stream.read_command()
                 except EOFError:
                     self.eof = True
-                    await asyncio.sleep(30)
                 else:
-                    asyncio.create_task(self._process_cmd(nick, cmd, args))
+                    tasks.append(asyncio.create_task(self._process_cmd(nick, cmd, args)))
+                    # Filter out done tasks
+                    tasks = [t for t in tasks if not t.done()]
+
+            await asyncio.gather(*tasks)
 
     async def _send_msg(self, result: str) -> None:
         """Writes a message to the output stream."""

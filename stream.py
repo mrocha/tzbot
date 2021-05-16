@@ -31,8 +31,8 @@ class StdioStream(ChatStream):
         return sys.stdin
 
     @property
-    def reader(self):
-        return sys.stdio
+    def writer(self):
+        return sys.stdout
 
     def is_command(self, line: str) -> bool:
         cmd_regex = r"[a-zA-Z]\w{0,31}: \s*(!timeat|!timepopularity) .+"

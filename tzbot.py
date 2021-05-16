@@ -33,15 +33,20 @@ class TZBot:
 
     def __init__(self, stream: ChatStream) -> None:
         self.stream = stream
-        self.ready = True
+        self.eof = False
         self.aliases = self._load_aliases()
+
+    def run(self) -> None:
+        """Process every message in stream until EOF."""
+        while not self.eof:
+            self.process_msg()
 
     def process_msg(self) -> None:
         """Processes the next message in the input stream."""
         try:
             nick, cmd, args = self._receive_cmd()
         except EOFError:
-            self.ready = False
+            self.eof = True
         else:
             if result := self._process_cmd(nick, cmd, args):
                 self._send_msg(result)
@@ -127,5 +132,4 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
 
     bot = TZBot(StdioStream())
-    while bot.ready:
-        bot.process_msg()
+    bot.run()

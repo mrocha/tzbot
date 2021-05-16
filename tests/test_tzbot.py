@@ -4,6 +4,7 @@ import settings
 
 from io import StringIO
 from pathlib import Path
+from stream import StdioStream
 from tzbot import TZBot
 
 
@@ -16,6 +17,18 @@ def test_should_return_time_when_given_valid_timezone(
     bot.process_msg()
 
     assert formatted_tztime == recv_message(bot)
+
+
+def test_should_return_time_when_given_an_aliased_timezone(
+    mocker, bot, tztime, formatted_tztime
+):
+    mock = mocker.patch("api_client.get_time_at", return_value=tztime)
+    send_message(bot, "josh: !timeat Vancouver")
+
+    bot.process_msg()
+
+    assert formatted_tztime == recv_message(bot)
+    mock.assert_called_with("America/Vancouver")
 
 
 def test_should_return_error_when_given_invalid_timezone(
@@ -79,9 +92,42 @@ def test_should_not_update_counter_for_invalid_timezones(mocker, bot):
     assert "0\n" == responses[1]
 
 
+def test_should_update_counter_for_aliased_timezones(
+    mocker, bot, tztime, formatted_tztime
+):
+    mock = mocker.patch("api_client.get_time_at", return_value=tztime)
+    messages = [
+        "josh: !timeat Vancouver",
+        "josh: !timepopularity America",
+    ]
+    send_messages(bot, messages)
+
+    for _ in range(len(messages)):
+        bot.process_msg()
+
+    responses = recv_messages(bot, len(messages))
+
+    assert formatted_tztime == responses[0]
+    mock.assert_called_with("America/Vancouver")
+    assert "1\n" == responses[1]
+
+
+class MockStream(StdioStream):
+    def __init__(self):
+        self.streams = StringIO(), StringIO()
+
+    @property
+    def reader(self):
+        return self.streams[0]
+
+    @property
+    def writer(self):
+        return self.streams[1]
+
+
 @pytest.fixture
 def bot():
-    return TZBot(StringIO(), StringIO())
+    return TZBot(MockStream())
 
 
 def send_message(bot, msg):
@@ -90,8 +136,8 @@ def send_message(bot, msg):
 
 def send_messages(bot, msgs):
     for msg in msgs:
-        bot.istream.write(msg + "\n")
-    bot.istream.seek(0)
+        bot.stream.reader.write(msg + "\n")
+    bot.stream.reader.seek(0)
 
 
 def recv_message(bot):
@@ -100,9 +146,9 @@ def recv_message(bot):
 
 def recv_messages(bot, amount):
     msgs = []
-    bot.ostream.seek(0)
+    bot.stream.writer.seek(0)
     for _ in range(amount):
-        msgs.append(bot.ostream.readline())
+        msgs.append(bot.stream.writer.readline())
     return msgs
 
 

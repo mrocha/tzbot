@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import api_client as api
 import json
-import re
 import settings
 import shelve
 import signal
@@ -10,7 +9,8 @@ import utils
 
 from datetime import datetime
 from io import TextIOBase
-from typing import Dict, List, Optional
+from stream import ChatStream, StdioStream
+from typing import Dict, List, Optional, Tuple
 
 
 class TZBot:
@@ -31,67 +31,46 @@ class TZBot:
             be written. Each posted message ends with a newline.
     """
 
-    def __init__(self, istream: TextIOBase, ostream: TextIOBase) -> None:
-        self.istream = istream
-        self.ostream = ostream
+    def __init__(self, stream: ChatStream) -> None:
+        self.stream = stream
         self.ready = True
         self.aliases = self._load_aliases()
 
     def process_msg(self) -> None:
         """Processes the next message in the input stream."""
         try:
-            nick, msg = self._receive_msg()
+            nick, cmd, args = self._receive_cmd()
         except EOFError:
             self.ready = False
         else:
-            if result := self._process_cmd(nick, msg):
+            if result := self._process_cmd(nick, cmd, args):
                 self._send_msg(result)
 
-    def _receive_msg(self) -> List[str]:
+    def _receive_cmd(self) -> Tuple[str, str, List[str]]:
         """Reads and validate a message from the input stream.
 
-        When the streams reaches to EOF, it raises an EOFError."""
+        When the streams reaches to EOF, it raises an EOFError.
+        """
+        line = self.stream.reader.readline()
 
-        line = self.istream.readline()
-
-        while line and not self._is_a_message(line):
-            line = self.istream.readline()
+        while line and not self.stream.is_command(line):
+            line = self.stream.reader.readline()
 
         if not line:
             raise EOFError()
 
-        return self._parse_msg(line)
+        return self.stream.parse_command(line)
 
     def _send_msg(self, result: str) -> None:
         """Writes a message to the output stream."""
-        self.ostream.write(f"{result}\n")
+        self.stream.writer.write(f"{result}\n")
 
-    def _is_a_message(self, line: str) -> bool:
-        """Validates whether a string is a message."""
-        nick, _ = self._parse_msg(line)
-        return self._is_valid_nick(nick) if nick else False
-
-    def _parse_msg(self, line: str) -> List[Optional[str]]:
-        """Parses nickname and message from a string."""
-        return line.split(": ", 1) if ": " in line else [None, None]
-
-    def _is_valid_nick(self, nick: str) -> bool:
-        """Validates whether a string is a valid nickname."""
-        return re.fullmatch(r"[a-zA-Z0-9]{1,32}", nick) is not None
-
-    def _process_cmd(self, nick: str, msg: str) -> Optional[str]:
+    def _process_cmd(self, nick: str, cmd: str, args: List[str]) -> Optional[str]:
         """Fulfills a command if it's present in the message.
 
         It returns the response message for the requested command.
-        It returns `None` when there is no message to be sent."""
-
-        cmd = msg.strip().split()
-        cmd, args = cmd[:1], cmd[1:]
-
-        # Ignore messages that are not commands
-        if not cmd or (cmd := cmd[0])[0] != "!":
-            return None
-
+        It returns `None` when there is no message to be sent.
+        """
         if cmd == "!timeat" and len(args) == 1:
             return self._timeat_cmd(args[0])
         elif cmd == "!timepopularity" and len(args) == 1:
@@ -147,6 +126,6 @@ if __name__ == "__main__":
 
     signal.signal(signal.SIGINT, signal_handler)
 
-    bot = TZBot(sys.stdin, sys.stdout)
+    bot = TZBot(StdioStream())
     while bot.ready:
         bot.process_msg()

@@ -24,4 +24,5 @@ async def main():
     with open("aliases.json", "w") as f:
         f.write(json.dumps(aliases, indent=2))
 
+
 asyncio.run(main())

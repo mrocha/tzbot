@@ -1,90 +1,121 @@
+import aiohttp
 import api_client as api
 import pytest
-import requests
 import settings
 
+from aiohttp import ClientSession
 from datetime import datetime
 from urllib.parse import urljoin
 
 
-def test_should_return_datetime_when_successful(tztime, requests_mock):
-    requests_mock.get(
+@pytest.mark.asyncio
+async def test_should_return_datetime_when_successful(response, tztime):
+    response.get(
         urljoin(settings.TIME_API, "/api/timezone/somewhere"),
-        json={"datetime": tztime.isoformat()},
+        payload={"datetime": tztime.isoformat()},
+        repeat=True,
     )
-    result = api.get_time_at("somewhere")
+
+    async with ClientSession() as session:
+        result = await api.get_time_at("somewhere", session)
+
     assert tztime == result
 
 
-def test_should_raise_error_when_timezone_is_invalid(requests_mock):
-    requests_mock.get(
-        urljoin(settings.TIME_API, "/api/timezone/somewhere"), status_code=404
-    )
+@pytest.mark.asyncio
+async def test_should_raise_error_when_timezone_is_invalid(response):
+    url = urljoin(settings.TIME_API, "/api/timezone/somewhere")
+    error_msg = "unknown timezone"
+    response.get(url, status=404, repeat=True)
 
-    with pytest.raises(api.APIError, match="unknown timezone"):
-        api.get_time_at("somewhere")
+    with pytest.raises(api.APIError, match=error_msg):
+        async with ClientSession() as session:
+            await api.get_time_at("somewhere", session)
 
-    assert requests_mock.call_count == 1
-
-
-def test_should_retry_when_http_error(requests_mock):
-    requests_mock.get(
-        urljoin(settings.TIME_API, "/api/timezone/somewhere"), status_code=500
-    )
-
-    with pytest.raises(
-        api.APIError, match=r"unable to retrieve time \(http code: 500\)"
-    ):
-        api.get_time_at("somewhere")
-
-    assert requests_mock.call_count == settings.BACKOFF_MAX_RETRIES
+    _, requests = response.requests.popitem()
+    assert len(requests) == 1
 
 
-def test_should_retry_when_connection_error(requests_mock):
-    requests_mock.get(
-        urljoin(settings.TIME_API, "/api/timezone/somewhere"),
-        exc=requests.exceptions.ConnectionError,
-    )
+@pytest.mark.asyncio
+async def test_should_retry_when_http_error(response):
+    url = urljoin(settings.TIME_API, "/api/timezone/somewhere")
+    error_msg = r"unable to retrieve time \(http code: 401\)"
+    response.get(url, status=401, repeat=True)
 
-    with pytest.raises(api.APIError, match="connection error"):
-        api.get_time_at("somewhere")
+    with pytest.raises(api.APIError, match=error_msg):
+        async with ClientSession() as session:
+            await api.get_time_at("somewhere", session)
 
-    assert requests_mock.call_count == settings.BACKOFF_MAX_RETRIES
-
-
-def test_should_retry_when_invalid_json(requests_mock):
-    requests_mock.get(urljoin(settings.TIME_API, "/api/timezone/somewhere"), text=".")
-
-    with pytest.raises(api.APIError, match="malformed response error"):
-        api.get_time_at("somewhere")
-
-    assert requests_mock.call_count == settings.BACKOFF_MAX_RETRIES
+    _, requests = response.requests.popitem()
+    assert len(requests) == settings.BACKOFF_MAX_RETRIES
 
 
-def test_should_retry_when_unexpected_error(requests_mock):
-    requests_mock.get(
-        urljoin(settings.TIME_API, "/api/timezone/somewhere"), exc=RuntimeError
-    )
+@pytest.mark.asyncio
+async def test_should_retry_when_connection_error(response):
+    url = urljoin(settings.TIME_API, "/api/timezone/somewhere")
+    error_msg = "connection error"
+    response.get(url, exception=aiohttp.ServerTimeoutError, repeat=True)
 
-    with pytest.raises(api.APIError, match="unknown error"):
-        api.get_time_at("somewhere")
+    with pytest.raises(api.APIError, match=error_msg):
+        async with ClientSession() as session:
+            await api.get_time_at("somewhere", session)
 
-    assert requests_mock.call_count == settings.BACKOFF_MAX_RETRIES
-
-
-def test_should_retry_when_time_is_missing(requests_mock):
-    requests_mock.get(urljoin(settings.TIME_API, "/api/timezone/somewhere"), json={})
-
-    with pytest.raises(api.APIError, match="time is unavailable"):
-        api.get_time_at("somewhere")
-
-    assert requests_mock.call_count == settings.BACKOFF_MAX_RETRIES
+    _, requests = response.requests.popitem()
+    assert len(requests) == settings.BACKOFF_MAX_RETRIES
 
 
-def test_should_return_timezones(requests_mock):
+@pytest.mark.asyncio
+async def test_should_retry_when_invalid_json(response):
+    url = urljoin(settings.TIME_API, "/api/timezone/somewhere")
+    error_msg = "malformed response error"
+    response.get(url, body=".", repeat=True)
+
+    with pytest.raises(api.APIError, match=error_msg):
+        async with ClientSession() as session:
+            await api.get_time_at("somewhere", session)
+
+    _, requests = response.requests.popitem()
+    assert len(requests) == settings.BACKOFF_MAX_RETRIES
+
+
+@pytest.mark.asyncio
+async def test_should_retry_when_unexpected_error(response):
+    url = urljoin(settings.TIME_API, "/api/timezone/somewhere")
+    error_msg = "unknown error"
+    response.get(url, exception=RuntimeError, repeat=True)
+
+    with pytest.raises(api.APIError, match=error_msg):
+        async with ClientSession() as session:
+            await api.get_time_at("somewhere", session)
+
+    _, requests = response.requests.popitem()
+    assert len(requests) == settings.BACKOFF_MAX_RETRIES
+
+
+@pytest.mark.asyncio
+async def test_should_retry_when_time_is_missing(response):
+    url = urljoin(settings.TIME_API, "/api/timezone/somewhere")
+    error_msg = "time is unavailable"
+    response.get(url, payload={}, repeat=True)
+
+    with pytest.raises(api.APIError, match=error_msg):
+        async with ClientSession() as session:
+            await api.get_time_at("somewhere", session)
+
+    _, requests = response.requests.popitem()
+    assert len(requests) == settings.BACKOFF_MAX_RETRIES
+
+
+@pytest.mark.asyncio
+async def test_should_return_timezones(response):
     timezones = ["a", "b", "c"]
-    requests_mock.get(urljoin(settings.TIME_API, "/api/timezone"), json=timezones)
-    result = api.get_timezones()
+    response.get(
+        urljoin(settings.TIME_API, "/api/timezone"), payload=timezones, repeat=True
+    )
+
+    async with ClientSession() as session:
+        result = await api.get_timezones(session)
+
     assert timezones == result
 
 

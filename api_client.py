@@ -75,9 +75,7 @@ async def _make_call(path: str, session: ClientSession) -> Dict[str, Any]:
         if e.status == 404:
             raise APIError("unknown timezone")
         else:
-            raise RetriableError(
-                f"unable to retrieve time (http code: {e.status})"
-            )
+            raise RetriableError(f"unable to retrieve time (http code: {e.status})")
     except aiohttp.ClientConnectionError:
         raise RetriableError("connection error")
     except Exception:

@@ -51,7 +51,9 @@ class TZBot:
                 except EOFError:
                     self.eof = True
                 else:
-                    tasks.append(asyncio.create_task(self._process_cmd(nick, cmd, args)))
+                    tasks.append(
+                        asyncio.create_task(self._process_cmd(nick, cmd, args))
+                    )
                     # Filter out done tasks
                     tasks = [t for t in tasks if not t.done()]
 

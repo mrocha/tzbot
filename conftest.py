@@ -1,5 +1,7 @@
 import pytest
 
+from aiohttp import ClientSession
+from aioresponses import aioresponses
 from datetime import datetime
 
 
@@ -11,3 +13,9 @@ def tztime() -> datetime:
 @pytest.fixture
 def formatted_tztime(tztime) -> datetime:
     return tztime.strftime("%-d %b %Y %H:%M") + "\n"
+
+
+@pytest.fixture
+def response():
+    with aioresponses() as m:
+        yield m

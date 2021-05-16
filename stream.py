@@ -17,6 +17,9 @@ class ChatStream(ABC):
 
 
 class StdioStream(ChatStream):
+    def __init__(self, istream=sys.stdin, ostream=sys.stdout):
+        self.istream, self.ostream = istream, ostream
+
     async def read_command(self) -> Tuple[str, str, List[str]]:
         line = await self._readline()
 
@@ -33,11 +36,11 @@ class StdioStream(ChatStream):
 
     async def _readline(self) -> None:
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, sys.stdin.readline)
+        return await loop.run_in_executor(None, self.istream.readline)
 
     async def _write(self, msg: str) -> None:
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, sys.stdout.write, msg)
+        return await loop.run_in_executor(None, self.ostream.write, msg)
 
     def _is_command(self, line: str) -> bool:
         cmd_regex = r"[a-zA-Z]\w{0,31}: \s*(!timeat|!timepopularity) .+"

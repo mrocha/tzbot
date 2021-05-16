@@ -9,47 +9,54 @@ from stream import StdioStream
 from tzbot import TZBot
 
 
-def test_should_return_time_when_given_valid_timezone(
-    mocker, bot, tztime, formatted_tztime
+@pytest.mark.asyncio
+async def test_should_return_time_when_given_valid_timezone(
+    mocker, bot, tztime, formatted_tztime, stream
 ):
     mocker.patch("api_client.get_time_at", return_value=tztime)
-    send_message(bot, "josh: !timeat America/Chicago")
+    send_message(stream, bot, "josh: !timeat America/Chicago")
 
-    bot.process_msg()
+    await bot.run()
 
-    assert formatted_tztime == recv_message(bot)
+    assert formatted_tztime == recv_message(stream, bot)
 
 
-def test_should_return_time_when_given_an_aliased_timezone(
-    mocker, bot, tztime, formatted_tztime
+@pytest.mark.asyncio
+async def test_should_return_time_when_given_an_aliased_timezone(
+    mocker, bot, tztime, formatted_tztime, stream
 ):
     mock = mocker.patch("api_client.get_time_at", return_value=tztime)
-    send_message(bot, "josh: !timeat Vancouver")
+    send_message(stream, bot, "josh: !timeat Vancouver")
 
-    bot.process_msg()
+    await bot.run()
 
-    assert formatted_tztime == recv_message(bot)
-    mock.assert_called_with("America/Vancouver")
+    assert formatted_tztime == recv_message(stream, bot)
+    assert mock.call_args.args[0] == "America/Vancouver"
 
 
-def test_should_return_error_when_given_invalid_timezone(
-    mocker, bot, tztime, formatted_tztime
+@pytest.mark.asyncio
+async def test_should_return_error_when_given_invalid_timezone(
+    mocker, bot, tztime, formatted_tztime, stream
 ):
     mocker.patch("api_client.get_time_at", side_effect=api.APIError("unknown timezone"))
-    send_message(bot, "josh: !timeat Somewhere")
+    send_message(stream, bot, "josh: !timeat Somewhere")
 
-    bot.process_msg()
+    await bot.run()
 
-    assert "unknown timezone\n" == recv_message(bot)
-
-
-def test_should_ignore_non_command_messages(bot):
-    send_message(bot, "josh: something")
-    bot.process_msg()
-    assert "" == recv_message(bot)
+    assert "unknown timezone\n" == recv_message(stream, bot)
 
 
-def test_should_return_popularity_when_given_a_timezone(mocker, bot, tztime):
+@pytest.mark.asyncio
+async def test_should_ignore_non_command_messages(bot, stream):
+    send_message(stream, bot, "josh: something")
+    await bot.run()
+    assert "" == recv_message(stream, bot)
+
+
+@pytest.mark.asyncio
+async def test_should_return_popularity_when_given_a_timezone(
+    mocker, bot, tztime, stream
+):
     mocker.patch("api_client.get_time_at", return_value=tztime)
     messages = [
         "josh: !timeat America/Chicago",
@@ -62,12 +69,11 @@ def test_should_return_popularity_when_given_a_timezone(mocker, bot, tztime):
         "josh: !timepopularity Etc/GMT+10",
         "josh: !timepopularity SomewhereElse",
     ]
-    send_messages(bot, messages)
+    send_messages(stream, bot, messages)
 
-    for _ in range(len(messages)):
-        bot.process_msg()
+    await bot.run()
 
-    responses = recv_messages(bot, len(messages))[3:]
+    responses = recv_messages(stream, bot, len(messages))[3:]
     assert "2\n" == responses[0]
     assert "1\n" == responses[1]
     assert "1\n" == responses[2]
@@ -76,80 +82,77 @@ def test_should_return_popularity_when_given_a_timezone(mocker, bot, tztime):
     assert "0\n" == responses[5]
 
 
-def test_should_not_update_counter_for_invalid_timezones(mocker, bot):
+@pytest.mark.asyncio
+async def test_should_not_update_counter_for_invalid_timezones(mocker, bot, stream):
     mocker.patch("api_client.get_time_at", side_effect=api.APIError("unknown timezone"))
     messages = [
         "josh: !timeat Somewhere",
         "josh: !timepopularity Somewhere",
     ]
-    send_messages(bot, messages)
+    send_messages(stream, bot, messages)
 
-    for _ in range(len(messages)):
-        bot.process_msg()
+    await bot.run()
 
-    responses = recv_messages(bot, len(messages))
+    responses = recv_messages(stream, bot, len(messages))
 
     assert "unknown timezone\n" == responses[0]
     assert "0\n" == responses[1]
 
 
-def test_should_update_counter_for_aliased_timezones(
-    mocker, bot, tztime, formatted_tztime
+@pytest.mark.asyncio
+async def test_should_update_counter_for_aliased_timezones(
+    mocker, bot, tztime, formatted_tztime, stream
 ):
     mock = mocker.patch("api_client.get_time_at", return_value=tztime)
     messages = [
         "josh: !timeat Vancouver",
         "josh: !timepopularity America",
     ]
-    send_messages(bot, messages)
+    send_messages(stream, bot, messages)
 
-    for _ in range(len(messages)):
-        bot.process_msg()
+    await bot.run()
 
-    responses = recv_messages(bot, len(messages))
+    responses = recv_messages(stream, bot, len(messages))
 
     assert formatted_tztime == responses[0]
-    mock.assert_called_with("America/Vancouver")
+    assert mock.call_args.args[0] == "America/Vancouver"
     assert "1\n" == responses[1]
 
 
 class MockStream(StdioStream):
     def __init__(self):
-        self.streams = StringIO(), StringIO()
-
-    @property
-    def reader(self):
-        return self.streams[0]
-
-    @property
-    def writer(self):
-        return self.streams[1]
+        super().__init__(StringIO(), StringIO())
 
 
 @pytest.fixture
-def bot():
-    return TZBot(MockStream())
+def stream():
+    return MockStream()
 
 
-def send_message(bot, msg):
-    return send_messages(bot, [msg])
+@pytest.fixture
+def bot(stream):
+    return TZBot(stream)
 
 
-def send_messages(bot, msgs):
+def send_message(stream, bot, msg):
+    return send_messages(stream, bot, [msg])
+
+
+def send_messages(stream, bot, msgs):
     for msg in msgs:
-        bot.stream.reader.write(msg + "\n")
-    bot.stream.reader.seek(0)
+        stream.istream.write(msg + "\n")
+    stream.istream.seek(0)
 
 
-def recv_message(bot):
-    return recv_messages(bot, 1)[0]
+def recv_message(stream, bot):
+    return recv_messages(stream, bot, 1)[0]
 
 
-def recv_messages(bot, amount):
+def recv_messages(stream, bot, amount):
     msgs = []
-    bot.stream.writer.seek(0)
+    stream.ostream.seek(0)
     for _ in range(amount):
-        msgs.append(bot.stream.writer.readline())
+        msgs.append(stream.ostream.readline())
     return msgs
 
 

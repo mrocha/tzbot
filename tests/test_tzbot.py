@@ -62,6 +62,23 @@ def test_should_return_popularity_when_given_a_timezone(mocker, bot, tztime):
     assert "0\n" == responses[5]
 
 
+def test_should_not_update_counter_for_invalid_timezones(mocker, bot):
+    mocker.patch("api_client.get_time_at", side_effect=api.APIError("unknown timezone"))
+    messages = [
+        "josh: !timeat Somewhere",
+        "josh: !timepopularity Somewhere",
+    ]
+    send_messages(bot, messages)
+
+    for _ in range(len(messages)):
+        bot.process_msg()
+
+    responses = recv_messages(bot, len(messages))
+
+    assert "unknown timezone\n" == responses[0]
+    assert "0\n" == responses[1]
+
+
 @pytest.fixture
 def bot():
     return TZBot(StringIO(), StringIO())

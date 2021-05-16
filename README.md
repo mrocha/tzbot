@@ -4,6 +4,8 @@ TZBot is a lean IRC bot that can tell the time in any requested timezone.
 
 ## Installation
 
+To create the virtual environment, install dependencies and generate the aliases map, execute:
+
 ```bash
 make
 ```

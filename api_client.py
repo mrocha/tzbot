@@ -1,10 +1,11 @@
+import json
 import requests
 import time
 import utils
 import settings
 
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any, Callable, Dict, List
 from urllib.parse import urljoin
 
 
@@ -41,17 +42,32 @@ def backoff(func: Callable[..., Any]) -> Callable[..., Any]:
 
 @backoff
 def get_time_at(timezone: str) -> datetime:
-    """Makes a REST request to get the time at the given timezone."""
+    """Makes a request to get the time at the given timezone."""
     if not utils.is_valid_timezone(timezone):
         return None
 
-    url = urljoin(settings.TIME_API, f"/api/timezone/{timezone}")
+    response = _make_call(f"/api/timezone/{timezone}")
+
+    try:
+        return datetime.fromisoformat(response.get("datetime", ""))
+    except ValueError:
+        raise RetriableError("time is unavailable")
+
+
+@backoff
+def get_timezones() -> List[str]:
+    """Makes a request to retrieve all available timezones."""
+    return _make_call(f"/api/timezone")
+
+
+def _make_call(path: str) -> Dict[str, Any]:
+    """Makes a REST GET request to the `TIME_API` service."""
+    url = urljoin(settings.TIME_API, path)
 
     try:
         response = requests.get(url)
         response.raise_for_status()
-        json_response = response.json()
-        return datetime.fromisoformat(json_response["datetime"])
+        return response.json()
     except requests.HTTPError:
         if response.status_code == 404:
             raise APIError("unknown timezone")
@@ -61,6 +77,7 @@ def get_time_at(timezone: str) -> datetime:
             )
     except (requests.ConnectionError, requests.Timeout):
         raise RetriableError("connection error")
+    except json.decoder.JSONDecodeError:
+        raise RetriableError("malformed response error")
     except Exception:
-        # JSON decoding errors will be handled here as well
         raise RetriableError("unknown error")

@@ -1,8 +1,8 @@
-.PHONY: default init run clean test
+.PHONY: default init run clean test aliases
 
 default: init
 
-init: venv
+init: venv aliases
 
 venv: requirements.txt
 	python3 -m venv venv
@@ -12,7 +12,7 @@ venv: requirements.txt
 		pip install -r requirements.txt; \
 	)
 
-run: venv tzbot.py
+run: venv aliases.json
 	@( \
 		. venv/bin/activate; \
 		python3 tzbot.py; \
@@ -21,12 +21,19 @@ run: venv tzbot.py
 clean:
 	rm -rf venv
 	rm -rf *.db
-	find -name "*.pyc" -delete
-	find -type d -name "__pycache__" -exec rm -rf "{}" \;
-	find -type d -name ".pytest_cache" -exec rm -rf "{}" \;
+	rm -rf aliases.json
+	find . -type f -name '*.pyc' -delete 
+	find . -type d -name __pycache__ -delete
+	rm -rf .pytest_cache
 
-test: venv
+test: venv aliases.json
 	@( \
 		. venv/bin/activate; \
 		pytest; \
+	)
+
+aliases aliases.json:
+	( \
+		. venv/bin/activate; \
+		python3 build_aliases.py; \
 	)

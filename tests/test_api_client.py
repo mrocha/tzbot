@@ -55,10 +55,37 @@ def test_should_retry_when_connection_error(requests_mock):
 def test_should_retry_when_invalid_json(requests_mock):
     requests_mock.get(urljoin(settings.TIME_API, "/api/timezone/somewhere"), text=".")
 
+    with pytest.raises(api.APIError, match="malformed response error"):
+        api.get_time_at("somewhere")
+
+    assert requests_mock.call_count == settings.BACKOFF_MAX_RETRIES
+
+
+def test_should_retry_when_unexpected_error(requests_mock):
+    requests_mock.get(
+        urljoin(settings.TIME_API, "/api/timezone/somewhere"), exc=RuntimeError
+    )
+
     with pytest.raises(api.APIError, match="unknown error"):
         api.get_time_at("somewhere")
 
     assert requests_mock.call_count == settings.BACKOFF_MAX_RETRIES
+
+
+def test_should_retry_when_time_is_missing(requests_mock):
+    requests_mock.get(urljoin(settings.TIME_API, "/api/timezone/somewhere"), json={})
+
+    with pytest.raises(api.APIError, match="time is unavailable"):
+        api.get_time_at("somewhere")
+
+    assert requests_mock.call_count == settings.BACKOFF_MAX_RETRIES
+
+
+def test_should_return_timezones(requests_mock):
+    timezones = ["a", "b", "c"]
+    requests_mock.get(urljoin(settings.TIME_API, "/api/timezone"), json=timezones)
+    result = api.get_timezones()
+    assert timezones == result
 
 
 @pytest.fixture(autouse=True)

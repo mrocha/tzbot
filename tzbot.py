@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
+import api_client as api
 import re
+import settings
+import shelve
 import sys
+import utils
 
 from datetime import datetime
 from io import TextIOBase
@@ -12,12 +16,12 @@ class TZBot:
         self.istream = istream
         self.ostream = ostream
 
-    def process_msgs(self) -> None:
+    def process_msg(self) -> None:
         nick, msg = self._receive_msg()
         if result := self._process_cmd(nick, msg):
             self._send_msg(result)
 
-    def _receive_msg(self):
+    def _receive_msg(self) -> List[str]:
         line = self.istream.readline()
         while not self._is_a_message(line):
             line = self.istream.readline()
@@ -46,7 +50,11 @@ class TZBot:
 
         # !timeat <tzinfo>
         if cmd == "!timeat" and len(args) == 1:
-            if tztime := self._get_time_at(args[0]):
+            try:
+                tztime = api.get_time_at(args[0])
+            except api.APIError as e:
+                return str(e)
+            else:
                 self._increment_popularity_of(args[0])
                 return self._format_time(tztime)
 
@@ -56,20 +64,22 @@ class TZBot:
 
         return None
 
-    def _get_time_at(self, timezone: str) -> datetime:
-        return datetime.now()
-
     def _format_time(self, tztime: datetime) -> str:
-        return str(tztime)
+        return tztime.strftime("%-d %b %Y %H:%M")
 
     def _increment_popularity_of(self, timezone: str) -> None:
-        pass
+        with shelve.open(settings.POLL_FILENAME) as poll:
+            for prefix in utils.tz_prefixes(timezone):
+                if prefix not in poll:
+                    poll[prefix] = 0
+                poll[prefix] += 1
 
     def _get_popularity_of(self, timezone: str) -> int:
-        return 0
+        with shelve.open(settings.POLL_FILENAME) as poll:
+            return poll[timezone] if timezone in poll else 0
 
 
 if __name__ == "__main__":
     bot = TZBot(sys.stdin, sys.stdout)
     while True:
-        bot.process_msgs()
+        bot.process_msg()

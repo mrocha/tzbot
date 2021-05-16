@@ -1,6 +1,8 @@
-.PHONY: default run clean
+.PHONY: default init run clean test
 
-default: venv
+default: init
+
+init: venv
 
 venv: requirements.txt
 	python3 -m venv venv
@@ -18,4 +20,13 @@ run: venv tzbot.py
 
 clean:
 	rm -rf venv
-	find -iname "*.pyc" -delete
+	rm -rf *.db
+	find -name "*.pyc" -delete
+	find -type d -name "__pycache__" -exec rm -rf "{}" \;
+	find -type d -name ".pytest_cache" -exec rm -rf "{}" \;
+
+test: venv
+	@( \
+		. venv/bin/activate; \
+		pytest; \
+	)

@@ -9,4 +9,8 @@ def setup_logger(name):
         datefmt="%H:%M:%S",
         stream=sys.stderr,
     )
+
+    # Bump the logging level of asyncio
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+
     return logging.getLogger("tzbot")

@@ -1,32 +1,37 @@
 # TZBot
 
-TZBot is a lean IRC bot that can tell the time in any requested timezone.
+TZBot is a simple IRC bot that can tell the time at any timezone.
 
 ## Installation
 
-To create the virtual environment, install dependencies and generate the aliases map, execute:
-
 ```bash
-make
+python3 -m venv venv
+. venv/bin/activate
+python setup.py install
 ```
 
 ## Usage
 
 ```bash
-make run
+$ tzbot --help
+usage: tzbot [-h] [--irc] [--aliases] [--tag] [--time-api TIME_API] [--irc-server IRC_SERVER] [--irc-channel IRC_CHANNEL]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --irc                 Serves requests from IRC instead of STDIO (default: False)
+  --aliases             Generates and rewrites the aliases JSON file. Then exits (default: False)
+  --tag                 If enabled, bot tags the requesting user on response (default: False)
+  --time-api TIME_API   Time API URL. This takes precedence over the environment variable (default: https://worldtimeapi.org/)
+  --irc-server IRC_SERVER
+                        IRC server to connect to (default: chat.freenode.net)
+  --irc-channel IRC_CHANNEL
+                        IRC channel to join to (default: ##mrocha)
 ```
 
-## Assumptions
+## Testing
 
+```bash
+. venv/bin/activate
+pip install -U tox
+tox
 ```
- Input takes the form of <username>: <message>, for example, josh: hello. There will always be exactly
- one space between the username - if there are multiple spaces, N-1 of them were part of the user’s message.
- The bot will receive a copy of all messages sent to the channel, but only needs to respond to those which start
- with an exclamation point, which we call “commands” - for example josh: !timeat America/Los_Angeles
-```
-
- * For the MVP, input and output will be handled through stdio and files. The final version can handle IRC channels.
- * Usernames can only have alphanumeric characters, otherwise the message will be ignored.
- * I arbitrarily chose 32 as the maximum length a nickname can have.
- * If there are multiple spaces between username and message, then N-1 spaces will always show up after the colon.
- * Commands with leading spaces will be processed.

@@ -110,29 +110,6 @@ class TZBot:
         """Implements the `!timepopularity <tzinfo_or_prefix>` command."""
         return str(await poll.get_popularity_of(tz_or_prefix))
 
-    async def generate_aliases(self):
-        """Generates the aliases JSON file."""
-        logger.info("Generation aliases.json file")
-
-        # Retrieve all available timezones
-        async with ClientSession() as session:
-            try:
-                timezones = await api.get_timezones(session)
-            except api.APIError:
-                timezones = []
-
-        # Map each suffix with its timezone
-        aliases = {tz.split("/")[-1]: tz for tz in timezones}
-
-        # Validate each suffix is unique
-        if len(aliases) == len(timezones):
-            raise RuntimeError("conflicting aliases between timezones")
-
-        # Dump the aliases over a JSON file
-        with pkg_resources.path(__package__, "aliases.json") as path:
-            with path.open("w") as f:
-                f.write(json.dumps(aliases, indent=2))
-
     def _load_aliases(self) -> Dict[str, str]:
         """Loads the aliases map from the pre-generated JSON file."""
         with pkg_resources.path(__package__, "aliases.json") as path:

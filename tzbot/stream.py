@@ -121,7 +121,7 @@ class IRCStream(ChatStream):
         return re.fullmatch(r"PING .+", line) is not None
 
     async def _pong(self, line: str) -> None:
-        logger.debug(f"IRC: PONG '{line}'")
         m = re.fullmatch(r"PING (.+)", line)
+        logger.debug(f"IRC: PONG {m[1]}")
         self.ostream.write(f"PONG {m[1]}".encode())
         await self.ostream.drain()

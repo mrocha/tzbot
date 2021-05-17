@@ -4,7 +4,7 @@ from signal import SIGINT, SIGTERM
 
 from . import log
 from . import TZBot
-from .stream import StdioStream
+from .stream import StdioStream, IRCStream
 
 logger = log.setup_logger("tzbot")
 
@@ -16,7 +16,10 @@ async def async_entry_point():
     for signal in [SIGINT, SIGTERM]:
         loop.add_signal_handler(signal, task.cancel)
 
-    bot = TZBot(StdioStream())
+    irc = IRCStream("chat.freenode.net", 6667, "el_tzbot", "##mrocha")
+    await irc.connect()
+
+    bot = TZBot(irc)
     await bot.run()
 
 

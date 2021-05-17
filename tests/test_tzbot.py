@@ -38,7 +38,9 @@ async def test_should_return_time_when_given_an_aliased_timezone(
 async def test_should_return_error_when_given_invalid_timezone(
     mocker, bot, tztime, formatted_tztime, stream
 ):
-    mocker.patch("tzbot.api_client.get_time_at", side_effect=api.APIError("unknown timezone"))
+    mocker.patch(
+        "tzbot.api_client.get_time_at", side_effect=api.APIError("unknown timezone")
+    )
     send_message(stream, bot, "josh: !timeat Somewhere")
 
     await bot.run()
@@ -84,7 +86,9 @@ async def test_should_return_popularity_when_given_a_timezone(
 
 @pytest.mark.asyncio
 async def test_should_not_update_counter_for_invalid_timezones(mocker, bot, stream):
-    mocker.patch("tzbot.api_client.get_time_at", side_effect=api.APIError("unknown timezone"))
+    mocker.patch(
+        "tzbot.api_client.get_time_at", side_effect=api.APIError("unknown timezone")
+    )
     messages = [
         "josh: !timeat Somewhere",
         "josh: !timepopularity Somewhere",

@@ -1,13 +1,14 @@
 import aiohttp
 import asyncio
 import json
-import utils
-import settings
 
 from aiohttp import ClientSession
 from datetime import datetime
 from typing import Any, Callable, Dict, List
 from urllib.parse import urljoin
+
+from . import utils
+from . import settings
 
 
 class APIError(RuntimeError):

@@ -1,28 +1,20 @@
 #!/usr/bin/env python3
-import api_client as api
 import asyncio
-import json
+import importlib.resources as pkg_resources
 import logging
-import poll
+import json
 import sys
 
 from aiohttp import ClientSession
 from datetime import datetime
 from pathlib import Path
-from signal import SIGINT, SIGTERM
-from stream import ChatStream, StdioStream
 from typing import Dict, List
 
-logging.basicConfig(
-    format="%(asctime)s [%(levelname)s -- %(filename)s(%(funcName)s:%(lineno)s)]: %(message)s",
-    level=logging.DEBUG,
-    datefmt="%H:%M:%S",
-    stream=sys.stderr,
-)
-logger = logging.getLogger("tzbot")
+from . import api_client as api
+from . import poll
+from .stream import ChatStream
 
-for m in ("charder.charsetprober", "selector_events"):
-    logging.getLogger(m).setLevel(logging.CRITICAL)
+logger = logging.getLogger("tzbot")
 
 
 class TZBot:
@@ -65,13 +57,14 @@ class TZBot:
                     self.eof = True
                 else:
                     logger.info(f"Command received from '{nick}': {cmd} {args}")
+                    # Spawn a new concurrent task to process the command
                     tasks.append(
                         asyncio.create_task(self._process_cmd(nick, cmd, args))
                     )
                     # Filter out done tasks
                     tasks = [t for t in tasks if not t.done()]
 
-            logger.info(f"EOF reached. Shutting down.")
+            logger.info(f"EOF reached. Waiting for remaining tasks and shutting down.")
             await asyncio.gather(*tasks)
 
     async def _process_cmd(self, nick: str, cmd: str, args: List[str]) -> None:
@@ -90,7 +83,7 @@ class TZBot:
 
         if message:
             logger.info(f"Sending result for '{nick}': {message}")
-            await self.stream.send_message(message)
+            await self.stream.send_message(nick, message)
         else:
             logger.info(f"Ignoring command from '{nick}': {cmd} {args}")
 
@@ -117,27 +110,34 @@ class TZBot:
         """Implements the `!timepopularity <tzinfo_or_prefix>` command."""
         return str(await poll.get_popularity_of(tz_or_prefix))
 
+    async def generate_aliases(self):
+        """Generates the aliases JSON file."""
+        logger.info("Generation aliases.json file")
+
+        # Retrieve all available timezones
+        async with ClientSession() as session:
+            try:
+                timezones = await api.get_timezones(session)
+            except api.APIError:
+                timezones = []
+
+        # Map each suffix with its timezone
+        aliases = {tz.split("/")[-1]: tz for tz in timezones}
+
+        # Validate each suffix is unique
+        if len(aliases) == len(timezones):
+            raise RuntimeError("conflicting aliases between timezones")
+
+        # Dump the aliases over a JSON file
+        with pkg_resources.path(__package__, "aliases.json") as path:
+            with path.open("w") as f:
+                f.write(json.dumps(aliases, indent=2))
+
     def _load_aliases(self) -> Dict[str, str]:
         """Loads the aliases map from the pre-generated JSON file."""
-        if not Path("aliases.json").exists():
-            return {}
-        with open("aliases.json") as f:
-            return json.load(f)
-
-
-async def main():
-    loop = asyncio.get_running_loop()
-    task = asyncio.current_task()
-
-    for signal in [SIGINT, SIGTERM]:
-        loop.add_signal_handler(signal, task.cancel)
-
-    bot = TZBot(StdioStream())
-    await bot.run()
-
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except asyncio.CancelledError:
-        logger.info("Execution was interrupted. Closing down.")
+        with pkg_resources.path(__package__, "aliases.json") as path:
+            if not path.exists():
+                logger.warning("aliases.json was not found")
+                return {}
+            with path.open() as f:
+                return json.load(f)

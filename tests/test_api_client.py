@@ -1,10 +1,10 @@
 import aiohttp
-import api_client as api
 import pytest
-import settings
 
 from aiohttp import ClientSession
 from datetime import datetime
+from tzbot import api_client as api
+from tzbot import settings
 from urllib.parse import urljoin
 
 

@@ -1,7 +1,8 @@
 import asyncio
-import settings
 import shelve
-import utils
+
+from . import settings
+from . import utils
 
 
 async def increment_popularity_of(timezone: str) -> None:

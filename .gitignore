@@ -1,4 +1,8 @@
 venv
+__pycache__
+build
+dist
+.pytest_cache/
 *.pyc
 *.db
-__pycache__
+*.egg*

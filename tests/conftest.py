@@ -1,6 +1,5 @@
 import pytest
 
-from aiohttp import ClientSession
 from aioresponses import aioresponses
 from datetime import datetime
 

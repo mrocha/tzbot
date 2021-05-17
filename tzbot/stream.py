@@ -5,6 +5,8 @@ import sys
 from abc import ABC, abstractmethod
 from typing import List, Optional, Tuple
 
+from . import settings
+
 
 class ChatStream(ABC):
     @abstractmethod
@@ -12,7 +14,7 @@ class ChatStream(ABC):
         """Retrieves the next command from the stream"""
 
     @abstractmethod
-    async def send_message(self, msg: str) -> None:
+    async def send_message(self, nick: str, msg: str) -> None:
         """Sends message to the stream"""
 
 
@@ -31,8 +33,9 @@ class StdioStream(ChatStream):
 
         return self._parse_command(line)
 
-    async def send_message(self, msg: str) -> None:
-        await self._write(f"{msg}\n")
+    async def send_message(self, nick: str, msg: str) -> None:
+        prefix = f"{nick}: " if settings.TAG_USER else ""
+        await self._write(f"{prefix}{msg}\n")
 
     async def _readline(self) -> None:
         loop = asyncio.get_running_loop()
